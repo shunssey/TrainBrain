@@ -1,0 +1,569 @@
+#!ruby -Ks
+
+###############################################
+#いじわる神経衰弱Animation
+#開発開始：100518
+###############################################
+
+require 'dxruby'
+require 'lib/scene.rb'
+require 'stop_button_DX.rb'
+class Button
+
+  def initialize(x, y, string = "", font_size = 36)
+    @image = Image.load("image/button.bmp")
+    @image.setColorKey([255, 255, 255])
+    @x = x
+    @y = y
+    @w = @image.width
+    @h = @image.height
+    @string = string
+    @font = Font.new(font_size)
+    @sound = Sound.new("sound/push13.wav")    #プッシュ音
+    draw_string
+  end
+  attr_accessor :x, :y, :string, :image, :font
+  attr_reader :w, :h
+  
+  def image=(filename)
+    @image = Image.load(filename)
+    @image.setColorKey([255, 255, 255])
+    @w = @image.width
+    @h = @image.height
+    draw_string
+  end
+  
+  def string=(string)
+    @string = string
+    draw_string
+  end
+  
+  def draw_string
+    size = @font.getWidth(@string)
+    @image.drawFont(@w/2-size/2, @h/2-@font.size/2, @string, @font)
+  end
+  
+  def load_push_sound(filename)
+    @sound = Sound.new(filename)
+  end
+  
+  def pushed?(mouse_x, mouse_y)
+    if (mouse_x - @x)/@w == 0 and (mouse_y - @y)/@h == 0
+      @sound.play if @sound   #効果音があればならす
+      return true
+    else
+      return false
+    end
+  end
+  
+  def render
+    Window.draw(@x, @y, @image)
+  end
+end
+
+#カード1枚のクラス
+class Card
+
+  def initialize
+    @images = Image.loadToArray("image/card.bmp", 6, 1)
+    @images.each do |image| 
+      image.setColorKey([255, 0, 255])
+    end
+    @x = 10
+    @y = 10
+    @w = @images[0].width
+    @h = @images[0].height
+    @state = :reverse     #状態フラグ :reverse裏 :to_obs表にひっくり返し中 :obverse表 :to_rev裏にひっくり返し中
+    @anmcnt = 0           #アニメーションカウンタ
+    @anmspd = 5            #アニメーションの速度
+    @obimage = @images[5].clone   #画像の初期化用
+  end
+  
+  attr_accessor :x, :y, :state
+  attr_reader :w, :h
+  
+  #番号に対応する絵柄をカードのおもて面に描く
+  def draw_image(filename)
+    @images[5] = @obimage.clone
+    obs_image = Image.load(filename)
+    key = obs_image[0, 0]      #画像左上(1, 1)の部分を透明色とする
+    obs_image.setColorKey(key)
+    @images[5].draw(1, 1, obs_image)
+  end
+  
+  #マウスが画像内か
+  def inside?(mouse_x, mouse_y)
+    (mouse_x - @x)/@w == 0 and (mouse_y - @y)/@h == 0
+  end
+   
+  #カードを開く
+  def open 
+    @state = :to_obs
+  end
+  
+  #カードを閉じる
+  def close
+    @state = :to_rev
+  end
+  
+  #x方向に移動 (目的x座標, スピード)
+  def move_x(goal_x, speed)
+    diff = (goal_x - @x)
+    if diff.abs > speed
+      if diff < 0       #マイナスの時
+        dx = -speed
+      elsif diff > 0    #プラスの時
+        dx = speed
+      else
+        dx = 0
+      end
+      @x += dx
+    else
+      @x = goal_x
+    end
+  end
+  
+  #y方向に移動 (目的y座標, スピード)
+  def move_y(goal_y, speed)
+    diff = (goal_y - @y)
+    if diff.abs > speed
+      if diff < 0       #マイナスの時
+        dy = -speed
+      elsif diff > 0    #プラスの時
+        dy = speed
+      else
+        dy = 0
+      end
+      @y += dy
+    else
+      @y = goal_y
+    end
+  end
+  
+  #座標にむかってまっすぐ動く
+  def move_to(goal_x, goal_y, speed)
+    diff_x = goal_x - @x
+    diff_y = goal_y - @y
+    if diff_x.abs < speed
+      @x = goal_x
+    else
+      dx = diff_x/speed
+      @x += dx
+    end
+    if diff_y.abs < speed
+      @y = goal_y
+    else
+      dy = diff_y/speed
+      @y += dy
+    end
+  end
+  
+  #描画
+  def render
+    case @state
+    when :reverse
+      Window.draw(@x, @y, @images[0])
+    when :to_obs
+      index = @anmcnt/@anmspd
+      if index < 5
+        @anmcnt += 1
+      else
+        @anmcnt = 5 * @anmspd
+        @state = :obverse
+      end
+      Window.draw(@x, @y, @images[index])
+    when :obverse
+      Window.draw(@x, @y, @images[5])
+    when :to_rev
+      index = @anmcnt/@anmspd
+      if index > 0
+        @anmcnt -= 1
+      else
+        @anmcnt = 0
+        @state = :reverse
+      end
+      Window.draw(@x, @y, @images[index])
+    end
+  end
+end
+
+
+#全カード制御クラス
+class ShinkeiCards
+
+  def initialize(num)                   #引き数カードの枚数
+    @num = num    
+    @speed = 10                         #カードの動くスピード      
+    init
+    @cards = Array.new(@num)         #カードインスタンス格納配列
+    @num.times do |i|
+      @cards[i] = Card.new
+    end 
+    @pos = Array.new(@num)
+    @card_w = @cards[0].w
+    @card_h = @cards[0].h
+    win_cx = Window.width/2
+    win_cy = Window.height/2
+    x1 = win_cx-3*(@card_w+30)         #左上カードのx座標
+    y1 = win_cy-1*(@card_h+30)        #左上カードのy座標
+    @num.times do |i|
+      x = x1 + (i%6)*(@card_w+30)
+      y = y1 + (i/6)*(@card_h+30)
+      @pos[i] = [x, y]
+      @cards[i].x = win_cx - @card_w/2 + (@num-i)
+      @cards[i].y = win_cy - 250 + (@num-i)
+    end
+    @se_deal = Sound.new("sound/swing13.wav")
+    @se_open = Sound.new("sound/swing29.wav")
+  end
+  
+  attr_accessor :cards, :card_data
+  
+  def init
+    @anime_cnt = 0
+    @deal_cnt = 0               #カードを配るときの制御順カウンタ
+    
+    @selected_card = []         #選択したカードの番号を格納
+    @temp_data = Array.new(@num/2){ |i| i+1 }        #カードの番号格納配列=>[1,2,3,4,]
+    @data1 = @temp_data.sort_by{rand}         #シャッフル
+    @data2 = @temp_data.sort_by{rand}
+    @card_data = Array.new(@num)                        #カードの内容格納配列
+  end    
+  
+  #クリックされたか判断し、されていればひっくり返す 戻り値カードID or false
+  def card_clicked(mouse_x, mouse_y)
+    @cards.each_with_index do |card, index|
+      if card.inside?(mouse_x, mouse_y)
+        return index
+      end
+    end
+    return false
+  end
+  
+  def open_card(index)
+    if @card_data[index] == nil
+      if @data1 != []
+        @card_data[index] = @data1.shift
+        @cards[index].draw_image("image/#{@card_data[index]}.bmp")    #カードの番号格納配列を元に画像の読み込み
+      else
+        @card_data[index] = @data2.shift
+        @cards[index].draw_image("image/#{@card_data[index]}.bmp")    #カードの番号格納配列を元に画像の読み込み
+      end
+    end
+    @cards[index].open
+    @se_open.play
+  end
+  
+  def close_card(index)
+    @cards[index].close
+  end
+  
+  def close_all_cards
+    @cards.each do |card|
+      card.close
+    end
+  end
+  
+  #カードを水平方向で真ん中に集める
+  def collect_horizon
+    center_x = Window.width/2-(@cards[0].w/2)    #画面真ん中の時のカードx座標
+    @cards.each_with_index do |card, i|
+      card.move_x(center_x+(i*-1), @speed)
+    end
+  end
+  
+  #カードを垂直方向で真ん中に集める
+  def collect_vertical
+    center_y = Window.height/2-(@cards[0].h/2)    #画面真ん中の時のカードy座標
+    @cards.each_with_index do |card, i|
+      card.move_y(center_y+(i*-1), @speed)
+    end
+  end
+  
+  #カードを上に移動させる
+  def move_to_up
+    @cards.each do |card|
+      card.y -= @speed
+    end
+  end
+  
+  #カードを配る(ように移動させる)
+  def deal
+    cnt = @num-@deal_cnt-1    #書くのが面倒なので短い変数として扱う
+    if @cards[cnt].x != @pos[@deal_cnt][0] or @cards[cnt].y != @pos[@deal_cnt][1]
+      @cards[cnt].move_x(@pos[@deal_cnt][0], @speed)
+      @cards[cnt].move_y(@pos[@deal_cnt][1], @speed)
+    else
+      @se_deal.play
+      if @deal_cnt < @cards.size-1
+        @deal_cnt += 1
+      else
+        @deal_cnt = 0
+        return false
+      end
+    end
+  end  
+  
+  #カードシャッフルアニメーション
+  def shuffle_anime
+    case @anime_cnt
+    when 0..50
+      collect_horizon
+    when 51..80
+      collect_vertical
+    when 81..100
+      move_to_up
+    else
+      if deal
+      else
+        @anime_cnt = 0
+        return false
+      end
+    end
+    @anime_cnt += 1
+  end
+  
+  #正解したカードを手前に移動
+  def get(index1, index2, x)
+    @cards[index1].move_to(x, Window.height-@card_h-10, @speed)
+    @cards[index2].move_to(x+10, Window.height-@card_h-10, @speed)
+  end  
+    
+  #描画
+  def render
+    @cards.each do |card|
+      card.render
+    end
+  end
+
+end
+
+    
+class MainScene < Scene::Base
+
+  def init
+    init_value
+    win_cx = Window.width/2
+    win_cy = Window.height/2
+    @sc = ShinkeiCards.new(@numofcard)
+    @font = Font.new(64)
+    @buttons = {}
+    @buttons[:retry] = Button.new(win_cx-80, win_cy-100, "もう一度")
+    @buttons[:title] = Button.new(win_cx+80, win_cy-100, "枚数変更")
+    @buttons[:end] = Button.new(win_cx-240, win_cy-100, "やめる")
+    @button_end = Button.new(Window.width-72, 0, "終了", 16)
+    @button_title = Button.new(Window.width-72*2, 0, "戻る", 16)
+    @button_end.image = ("image/button2.bmp")
+    @button_title.image = ("image/button2.bmp")
+    @se_correct = Sound.new("sound/seikai.wav")
+  end
+  
+  def init_value
+    @numofcard = $num_of_card             #カード枚数
+    @counter = 0
+    @correct_draw = false          #正解描画フラグ
+    @state = :init           #状態フラグ  init:初期状態 select1:1枚目を選択中  select2:二枚目を選択中
+                                #            shuffle:シャッフル中  judge:判定画面  :correct  :miss
+    @selected_cardid = []       #選択したカードのばんごうを格納
+    @selected_card = nil         #選択したカードの内容を格納
+    @get_count = 0              #会得枚数
+    @init_time = Time.now       #初期時間取得
+    @click_count = 0
+    @try_count = 0
+    $file.puts ""
+  end
+  
+  def update
+    @mouse_x = Input.mousePosX
+    @mouse_y = Input.mousePosY
+
+    #マウスの左クリックされた時の処理
+    if Input.mousePush?(M_LBUTTON)
+      if @button_end.pushed?(@mouse_x, @mouse_y)
+        exit   
+      elsif @button_title.pushed?(@mouse_x, @mouse_y)
+        self.next_scene = TitleScene   
+      elsif clickedindex = @sc.card_clicked(@mouse_x, @mouse_y)
+        if @state == :select1
+          if @sc.cards[clickedindex].state == :reverse
+            @sc.open_card(clickedindex)
+            @selected_card = @sc.card_data[clickedindex]
+            @selected_cardid[0] = clickedindex
+            @state = :select2
+          end
+        elsif @state == :select2
+          if @sc.cards[clickedindex].state == :reverse
+            @sc.open_card(clickedindex)
+            @selected_cardid[1] = clickedindex
+            @state = :judge 
+            if same_card?(@sc.card_data[clickedindex])
+              @state = :correct
+              @get_count += 1
+              @se_correct.play
+              $file.puts "#{@numofcard},#{@selected_cardid[0]},#{@selected_cardid[1]},#{@sc.card_data[@selected_cardid[0]]},#{@sc.card_data[@selected_cardid[1]]},当たり,#{Time.now-@init_time}"
+            else
+              @state = :miss
+              $file.puts "#{@numofcard},#{@selected_cardid[0]},#{@selected_cardid[1]},#{@sc.card_data[@selected_cardid[0]]},#{@sc.card_data[@selected_cardid[1]]},はずれ,#{Time.now-@init_time}"
+            end
+            @try_count += 1
+          end   
+        end
+      else
+       if @state == :end
+        #ボタンイベント処理
+         if @buttons[:retry].pushed?(@mouse_x, @mouse_y)
+           @sc.close_all_cards
+           init_value
+           @sc.init
+           @state = :shuffle
+         elsif @buttons[:title].pushed?(@mouse_x, @mouse_y)
+           self.next_scene = TitleScene
+         elsif @buttons[:end].pushed?(@mouse_x, @mouse_y)
+           exit
+         end
+       else
+         $file.puts "#{@numofcard},,,,,ミスクリック,#{Time.now-@init_time}"
+         @click_count += 1
+       end
+      end 
+     end
+ 
+    #状態ごとの処理
+    case @state
+    when :correct
+      @counter += 1
+      if @counter <= 40
+      
+      elsif @counter > 40 and @counter <= 60  
+        @correct_draw = true
+      elsif @counter <= 120
+        @selected_cardid.sort!
+        @sc.get(@selected_cardid[0], @selected_cardid[1], (@get_count-1)*90+10)
+      elsif @counter > 120
+        @counter = 0
+        @correct_draw = false
+        if @get_count*2 == @numofcard
+          $file.puts ",,,,,,,#{@numofcard},#{@try_count},#{@click_count}"
+          @state = :end
+        else
+          @state = :select1
+        end
+      end
+    when :miss
+      @counter += 1
+      if @counter <= 120
+        #はずれ
+      elsif @counter <= 122
+        @sc.close_card(@selected_cardid[0]) 
+        @sc.close_card(@selected_cardid[1])
+      elsif @counter > 123
+        @counter = 0
+        @state = :select1
+      end
+    when :shuffle
+      if @sc.shuffle_anime
+      else
+        @state = :select1
+      end
+    when :init
+      if @sc.deal
+      else
+        @state = :select1
+      end
+    end
+  end
+  
+  def same_card?(card_data)
+    card_data == @selected_card
+  end
+  
+  def render
+    @sc.render
+    @button_end.render
+    $button_help.draw
+    @button_title.render
+    if @state == :correct  and @correct_draw == true
+      Window.drawFont(Window.width/2-@font.size*1.5, Window.height/2-200, "当たり", @font)
+    elsif @state == :end
+      @buttons.each_value do |button|
+        button.render
+      end
+      Window.drawFont(Window.width/2-@font.size*3.5, Window.height/2-200, "全部とりました!!", @font)
+    end
+  end  
+end
+
+
+class TitleScene < Scene::Base
+
+  def init
+    Window.bgcolor = [0, 200, 0]
+    @win_w = Window.width
+    @win_h = Window.height
+    @font = Font.new(72)
+    @buttons = []
+    6.times do |i|
+      @buttons[i] = Button.new(@win_w/2-160+170*(i/3), @win_h/2-60+90*(i%3), "#{(i+1)*2}枚")
+    end
+    @button_fullscr = Button.new(@win_w-72*2, 0, "フル", 16)
+    @button_end = Button.new(Window.width-72, 0, "終了", 16)
+    $button_help = StopButton.new
+    @button_fullscr.image = ("image/button2.bmp")
+    @button_end.image = ("image/button2.bmp")
+
+    @title_string = "トランプあわせゲーム"
+    @title_x = @win_w/2-@font.getWidth(@title_string)/2
+    @card = Card.new
+    @card.x = @win_w/2+100
+    @card.y = 40
+  end
+  
+  def update
+    if Input.mousePush?(M_LBUTTON)
+      mousex = Input.mousePosX
+      mousey = Input.mousePosY
+      @buttons.each_with_index do |button, i|
+        if button.pushed?(mousex, mousey)
+          $num_of_card = (i+1)*2
+          self.next_scene = MainScene
+        end
+      end
+      if @button_fullscr.pushed?(mousex, mousey)
+        Window.windowed = false
+      elsif @button_end.pushed?(mousex, mousey)
+        exit
+      elsif $button_help.pushed?(mousex,mousey)
+      end
+    end
+  end
+  
+  def render
+    Window.drawFont(@title_x , @win_h/2-180, @title_string, @font)
+    @buttons.each do |button|
+      button.render
+    end
+    #@card.render
+    @button_fullscr.render
+    @button_end.render
+    $button_help.draw
+  end
+
+end
+
+Window.width = 800
+Window.height = 600
+name = "神経"  
+date = Time.now.strftime("%Y.%m.%d_%H.%M.%S")
+fname = "log/#{name}_#{date}.csv"
+$file = File::open(fname, "w")
+$file.puts "カード枚数,位置:card1,位置:card2,数:card1,数:card2,判定,time,枚数,試行回数,ミスクリック"
+$file.puts ""
+
+# シーン実行
+#Scene.main_loop MainScene, 60, 1
+Scene.main_loop TitleScene, 60, 1
+
+
+
+
+

@@ -1,0 +1,5 @@
+CAP
+DOG
+CAT
+BIG
+FOX

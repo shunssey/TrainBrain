@@ -1,0 +1,130 @@
+require "sdl"
+require "nkf"
+require "dxruby"
+
+class StopButton
+ def initialize
+   #スクリーンの大きさから、ボタンの表示位置を決定
+   @x = Window.width - 72*3
+   @y = 0
+   @x_help = 100
+   @y_help = 100
+   @button_color = [220,220,220]
+   @r,@g,@b   = 0,0,0 #フォントの色
+
+   #@font = SDL::TTF.open('C:\WINDOWS\Fonts\MSGOTHIC.TTC', 12)
+   @font = Font.new( 16, 'MSGOTHIC.TTC')  # MS Gothic & MS PGothic & MS UI Gothic
+   #@font2 = SDL::TTF.open('C:\WINDOWS\Fonts\MSGOTHIC.TTC', 35)
+   @font2 = Font.new( 24, 'MSGOTHIC.TTC' )
+
+   self.mk_image(120,60)
+   
+   @time_help = 0 #[ヘルプ]の画面を表示していた時間の合計
+   
+   #背景の画像
+   @back_screen = Image.new(Window.width,Window.height)
+   #戻るボタンの画像  
+   @back_button = Image.new(224,60,[150,150,150])
+   #@screen.fill_rect(@x_help,@y_help,224,60,[150,150,150])
+   @back_button.boxFill(3,3,218,54,@button_color)
+   @back_button.drawFont(50,9,"もどる",@font2,[0,0,0])
+ end
+
+ def mk_image(w,h)
+   # w x h の画像を作成
+   #@image = Image.new(w,h,[150,150,150])
+   @image =Image.load("image/button2.bmp")
+   @image.drawFont(6,12,"せつめい",@font,[255,255,255])
+   #@image.fill([150,150,150])
+   #@image.fill_rect(0,0,w,h,[150,150,150])
+   #@image.fill_rect(3,3,w-6,h-6,@button_color)
+   #@image.boxFill(3,3,w-6,h-6,@button_color)
+   #left = w/2 +10
+   #@image.draw_line(left-10,0,left-10,h,[150,150,150])
+   #@image.line(left-10,0,left-10,h,[150,150,150])
+   #@image.drawFont(6,22,"せつめい",@font,[0,0,0])
+   #@font.draw_solid_utf8(@screen, NKF.nkf('-w',"せつめい"),@x+6,@y+22,@r,@g,@b)
+   #@image.drawFont(@x+@image.width/2+5,@y+22,"ちゅうし",@font,[0,0,0])
+   #@font.draw_solid_utf8(@screen, NKF.nkf('-w',"ちゅうし"),@x+@image.w/2+5,@y+22,@r,@g,@b)
+ end
+ 
+ #ボタンの表示位置を変更したい場合に使用
+ def set_pos(x,y)
+   @x,@y = x,y
+ end
+ 
+ #ボタンの背景色の変更
+ def set_button_color(r, g, b)
+   @button_color = [r,g,b]
+   self.mk_image(@image.width,@image.height) #ボタンの書き換え
+ end
+  
+ #ボタンのフォント色の変更
+ def set_font_color(r, g, b)
+   @r,@g,@b = r,g,b
+ end
+ 
+ def pushed?(x,y)
+    if (@y..@y+@image.height).include?(y)
+     if (@x..@x+@image.width).include?(x)
+       self.setsumei
+     end
+    end
+ end
+ 
+ def setsumei
+   #time_start = SDL.getTicks/1000.0
+   
+   #@screen.fill_rect(0,0,@screen.w,@screen.h,BACK)
+   Window.draw(0,0,@back_screen)
+   Window.draw(@x_help,@y_help,@back_button)
+   
+   #表示する説明を編集
+   
+   Window.drawFont( 200, 200, "[2枚][4枚][6枚][8枚][10枚][12枚]の中から、", @font2, :color => [255,0,0] )
+   Window.drawFont( 70, 230, "出題されるトランプの枚数を選びます。", @font2, :color => [255,0,0] )
+   Window.drawFont( 50, 280, "出題されるトランプの中から2枚選び、", @font2, :color => [255,0,0] )
+   Window.drawFont( 70, 310, "同じ数字なら得ることができます。", @font2, :color => [255,0,0] )
+   Window.drawFont( 50, 360, "すべてのトランプを得ることが出来ればクリアです。", @font2, :color => [255,0,0] )
+
+   #@font2.draw_solid_utf8(@screen, NKF.nkf('-w',"せつめい"),200,300,0,0,0)
+   
+   #@screen.update_rect(0,0,0,0)
+   
+   loop = "do"
+   while loop == "do"
+     Window.update
+     if Input.mousePush?(M_LBUTTON)
+       x,y = Input.mousePosX, Input.mousePosY
+       ## 戻るボタンが押された判定
+       if (@x_help..@x_help+224).include?(x)
+         if (@y_help..@y_help+60).include?(y)
+           #タイマーの計算
+           #time_end = SDL.getTicks/1000.0
+           #time_show = time_end - time_start
+           #@time_help += time_show
+           
+           loop = "end"
+         end
+       end
+     end
+    end #loop
+ end
+ 
+ def draw
+   #@screen.put(@image,@x,@y)
+   #@screen.update_rect(@x,@y,@image.w,@image.h)
+   Window.draw(@x,@y,@image)
+   Window.update
+ end
+ 
+ def time?
+   return @time_help
+ end
+ 
+ def timer_reset
+   @time_help = 0
+ end
+
+end
+

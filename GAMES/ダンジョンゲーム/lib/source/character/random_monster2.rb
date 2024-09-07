@@ -1,0 +1,61 @@
+######################################################################
+class Init_Scene  < Scene::Base
+  
+  #タイトル画面の諸々の定義↓ここから↓
+  def random_monster_init
+    $random_monster_move_count = Array.new
+    for i in $trace_monster_number..$random_monster_number
+      $random_monster_move_count[i] = 0 #キャラクターの移動のカウント
+    end
+    $random_monster_move_count2 = 30 #キャラクターがこのカウントより大きくなった時に動き出す。
+    $monster_direct = 0
+  end #init
+  
+  def random_monster_update
+    #ランダム
+    @r = rand(4)
+    for i in $trace_monster_number..$random_monster_number #for
+      $random_monster_move_count[i] += 1
+      if $random_monster_move_count[i] > $random_monster_move_count2 #モンスターが動き出すまでのカウント
+        if @r == 0
+          if $maze["#{($monster2[i+1].y-$masu_posi[1])/30}".to_i]["#{($monster2[i+1].x-$masu_posi[0])/30}".to_i-1] != 1 #左に岩がない時に
+            $monster2[i+1] = Array_Images.new($monster2[i+1].x, $monster2[i+1].y,"./image/character/monster2.png",3,4,3)
+            $monster2[i+1].x -= 30
+            $random_monster_move_count[i] = 0 
+          elsif $maze["#{($monster2[i+1].y-$masu_posi[1])/30}".to_i]["#{($monster2[i+1].x-$masu_posi[0])/30}".to_i-1] == 1 #左に岩がない時に
+            @r = rand(4)
+          end
+        elsif @r == 1
+          if $maze["#{($monster2[i+1].y-$masu_posi[1])/30}".to_i]["#{($monster2[i+1].x-$masu_posi[0])/30}".to_i+1] != 1 #右に岩がない時に
+            $monster2[i+1] = Array_Images.new($monster2[i+1].x, $monster2[i+1].y,"./image/character/monster2.png",3,4,6)
+            $monster2[i+1].x += 30
+            $random_monster_move_count[i] = 0
+          elsif $maze["#{($monster2[i+1].y-$masu_posi[1])/30}".to_i]["#{($monster2[i+1].x-$masu_posi[0])/30}".to_i+1] == 1 #右に岩がない時に
+            @r = rand(4)
+          end
+        elsif @r == 2
+          if $maze["#{($monster2[i+1].y-$masu_posi[1])/30}".to_i-1]["#{($monster2[i+1].x-$masu_posi[0])/30}".to_i] != 1 #上に岩がない時に
+            $monster2[i+1] = Array_Images.new($monster2[i+1].x, $monster2[i+1].y,"./image/character/monster2.png",3,4,9)
+            $monster2[i+1].y -= 30
+            $random_monster_move_count[i] = 0
+          elsif $maze["#{($monster2[i+1].y-$masu_posi[1])/30}".to_i-1]["#{($monster2[i+1].x-$masu_posi[0])/30}".to_i] == 1 #上に岩がない時に
+            @r = rand(4)
+          end
+        elsif @r == 3
+          if $maze["#{($monster2[i+1].y-$masu_posi[1])/30}".to_i+1]["#{($monster2[i+1].x-$masu_posi[0])/30}".to_i] != 1 #下に岩がない時に
+            $monster2[i+1] = Array_Images.new($monster2[i+1].x, $monster2[i+1].y,"./image/character/monster2.png",3,4,0)
+            $monster2[i+1].y += 30
+            $random_monster_move_count[i] = 0
+          elsif $maze["#{($monster2[i+1].y-$masu_posi[1])/30}".to_i+1]["#{($monster2[i+1].x-$masu_posi[0])/30}".to_i] == 1 #下に岩がない時に
+            @r = rand(4)
+          end
+        end
+      end
+    end #for
+  end #update
+  
+  def random_monster_render
+    
+  end #render
+end #scene
+##################################################################
